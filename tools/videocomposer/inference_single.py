@@ -362,7 +362,7 @@ def worker(gpu, cfg):
     torch.backends.cudnn.benchmark = True
     if not cfg.debug:
         dist.init_process_group(backend='nccl', world_size=cfg.world_size, rank=cfg.rank)
-
+    
     # logging
     log_dir = ops.generalized_all_gather(cfg.log_dir)[0]
     exp_name = os.path.basename(cfg.cfg_file).split('.')[0] + '-S%05d' % (cfg.seed)
@@ -385,6 +385,7 @@ def worker(gpu, cfg):
     l1 = len(cfg.frame_lens)
     l2 = len(cfg.feature_framerates)
     cfg.max_frames = cfg.frame_lens[cfg.rank % (l1*l2)// l2]
+    # print(cfg.batch_sizes)
     cfg.batch_size = cfg.batch_sizes[str(cfg.max_frames)]
     
     # [Transformer] Transformers for different inputs
@@ -700,6 +701,7 @@ def worker(gpu, cfg):
                     ddim_timesteps=cfg.ddim_timesteps,
                     eta=0.0)
                 
+                print("--")
                 visualize_with_model_kwargs(model_kwargs = model_kwargs,
                     video_data = video_output,
                     autoencoder = autoencoder,

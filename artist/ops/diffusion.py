@@ -10,7 +10,8 @@ def _i(tensor, t, x):
     r"""Index tensor using t and format the output according to x.
     """
     shape = (x.size(0), ) + (1, ) * (x.ndim - 1)
-    return tensor[t].view(shape).to(x)
+    #return tensor[t].view(shape).to(x)
+    return tensor.to(x)[t].view(shape)
 
 def beta_schedule(schedule, num_timesteps=1000, init_beta=None, last_beta=None):
     if schedule == 'linear':

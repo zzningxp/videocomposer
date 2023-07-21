@@ -7,7 +7,7 @@ from rotary_embedding_torch import RotaryEmbedding
 from fairscale.nn.checkpoint import checkpoint_wrapper
 from functools import partial
 from torch import einsum
-from .mha_flash import FlashAttentionBlock
+#from .mha_flash import FlashAttentionBlock
 import xformers
 import xformers.ops
 
@@ -1222,79 +1222,131 @@ class UNetSD_temporal(nn.Module):
             nn.SiLU(),
             nn.Linear(1024, 1024))
 
+        avgpool_dim = cfg.resolution // 2
+        
         ### depth embedding
         if 'depthmap' in self.video_compositions:
             self.depth_embedding = nn.Sequential(
                 nn.Conv2d(1, concat_dim * 4, 3, padding=1),
                 nn.SiLU(),
-                nn.AdaptiveAvgPool2d((128, 128)),
+                nn.AdaptiveAvgPool2d((avgpool_dim, avgpool_dim)),
                 nn.Conv2d(concat_dim * 4, concat_dim * 4, 3, stride=2, padding=1),
                 nn.SiLU(),
                 nn.Conv2d(concat_dim * 4, concat_dim, 3, stride=2, padding=1))
-            self.depth_embedding_after = Transformer_v2(heads=2, dim=concat_dim, dim_head_k=concat_dim, dim_head_v=concat_dim, dropout_atte = 0.05, mlp_dim=concat_dim, dropout_ffn = 0.05, depth=adapter_transformer_layers)
+            self.depth_embedding_after = Transformer_v2(heads=2,
+                dim=concat_dim,
+                dim_head_k=concat_dim,
+                dim_head_v=concat_dim,
+                dropout_atte = 0.05,
+                mlp_dim=concat_dim,
+                dropout_ffn = 0.05,
+                depth=adapter_transformer_layers)
         
         if 'motion' in self.video_compositions:
             self.motion_embedding = nn.Sequential(
                 nn.Conv2d(2, concat_dim * 4, 3, padding=1),
                 nn.SiLU(),
-                nn.AdaptiveAvgPool2d((128, 128)),
+                nn.AdaptiveAvgPool2d((avgpool_dim, avgpool_dim)),
                 nn.Conv2d(concat_dim * 4, concat_dim * 4, 3, stride=2, padding=1),
                 nn.SiLU(),
                 nn.Conv2d(concat_dim * 4, concat_dim, 3, stride=2, padding=1))
-            self.motion_embedding_after = Transformer_v2(heads=2, dim=concat_dim, dim_head_k=concat_dim, dim_head_v=concat_dim, dropout_atte = 0.05, mlp_dim=concat_dim, dropout_ffn = 0.05, depth=adapter_transformer_layers)
+            self.motion_embedding_after = Transformer_v2(heads=2,
+                dim=concat_dim,
+                dim_head_k=concat_dim,
+                dim_head_v=concat_dim,
+                dropout_atte = 0.05,
+                mlp_dim=concat_dim,
+                dropout_ffn = 0.05,
+                depth=adapter_transformer_layers)
         
         ### canny embedding
         if 'canny' in self.video_compositions:
             self.canny_embedding = nn.Sequential(
                 nn.Conv2d(1, concat_dim * 4, 3, padding=1),
                 nn.SiLU(),
-                nn.AdaptiveAvgPool2d((128, 128)),
+                nn.AdaptiveAvgPool2d((avgpool_dim, avgpool_dim)),
                 nn.Conv2d(concat_dim * 4, concat_dim * 4, 3, stride=2, padding=1),
                 nn.SiLU(),
                 nn.Conv2d(concat_dim * 4, concat_dim, 3, stride=2, padding=1))
-            self.canny_embedding_after = Transformer_v2(heads=2, dim=concat_dim, dim_head_k=concat_dim, dim_head_v=concat_dim, dropout_atte = 0.05, mlp_dim=concat_dim, dropout_ffn = 0.05, depth=adapter_transformer_layers)
+            self.canny_embedding_after = Transformer_v2(heads=2,
+                dim=concat_dim,
+                dim_head_k=concat_dim,
+                dim_head_v=concat_dim,
+                dropout_atte = 0.05,
+                mlp_dim=concat_dim,
+                dropout_ffn = 0.05,
+                depth=adapter_transformer_layers)
 
         ### masked-image embedding
         if 'mask' in self.video_compositions:
             self.masked_embedding = nn.Sequential(
                 nn.Conv2d(4, concat_dim * 4, 3, padding=1),
                 nn.SiLU(),
-                nn.AdaptiveAvgPool2d((128, 128)),
+                nn.AdaptiveAvgPool2d((avgpool_dim, avgpool_dim)),
                 nn.Conv2d(concat_dim * 4, concat_dim * 4, 3, stride=2, padding=1),
                 nn.SiLU(),
                 nn.Conv2d(concat_dim * 4, concat_dim, 3, stride=2, padding=1)) if inpainting else None
-            self.mask_embedding_after = Transformer_v2(heads=2, dim=concat_dim, dim_head_k=concat_dim, dim_head_v=concat_dim, dropout_atte = 0.05, mlp_dim=concat_dim, dropout_ffn = 0.05, depth=adapter_transformer_layers)
+            self.mask_embedding_after = Transformer_v2(heads=2,
+                dim=concat_dim,
+                dim_head_k=concat_dim,
+                dim_head_v=concat_dim,
+                dropout_atte = 0.05,
+                mlp_dim=concat_dim,
+                dropout_ffn = 0.05,
+                depth=adapter_transformer_layers)
 
         ### sketch embedding
         if 'sketch' in self.video_compositions:
             self.sketch_embedding = nn.Sequential(
                 nn.Conv2d(1, concat_dim * 4, 3, padding=1),
                 nn.SiLU(),
-                nn.AdaptiveAvgPool2d((128, 128)),
+                nn.AdaptiveAvgPool2d((avgpool_dim, avgpool_dim)),
                 nn.Conv2d(concat_dim * 4, concat_dim * 4, 3, stride=2, padding=1),
                 nn.SiLU(),
                 nn.Conv2d(concat_dim * 4, concat_dim, 3, stride=2, padding=1))
-            self.sketch_embedding_after = Transformer_v2(heads=2, dim=concat_dim, dim_head_k=concat_dim, dim_head_v=concat_dim, dropout_atte = 0.05, mlp_dim=concat_dim, dropout_ffn = 0.05, depth=adapter_transformer_layers)
+            self.sketch_embedding_after = Transformer_v2(heads=2,
+                dim=concat_dim,
+                dim_head_k=concat_dim,
+                dim_head_v=concat_dim,
+                dropout_atte = 0.05,
+                mlp_dim=concat_dim,
+                dropout_ffn = 0.05,
+                depth=adapter_transformer_layers)
         
         if 'single_sketch' in self.video_compositions:
             self.single_sketch_embedding = nn.Sequential(
                 nn.Conv2d(1, concat_dim * 4, 3, padding=1),
                 nn.SiLU(),
-                nn.AdaptiveAvgPool2d((128, 128)),
+                nn.AdaptiveAvgPool2d((avgpool_dim, avgpool_dim)),
                 nn.Conv2d(concat_dim * 4, concat_dim * 4, 3, stride=2, padding=1),
                 nn.SiLU(),
                 nn.Conv2d(concat_dim * 4, concat_dim, 3, stride=2, padding=1))
-            self.single_sketch_embedding_after = Transformer_v2(heads=2, dim=concat_dim, dim_head_k=concat_dim, dim_head_v=concat_dim, dropout_atte = 0.05, mlp_dim=concat_dim, dropout_ffn = 0.05, depth=adapter_transformer_layers)
+            self.single_sketch_embedding_after = Transformer_v2(
+                heads=2, 
+                dim=concat_dim, 
+                dim_head_k=concat_dim, 
+                dim_head_v=concat_dim, 
+                dropout_atte = 0.05, 
+                mlp_dim=concat_dim, 
+                dropout_ffn = 0.05, 
+                depth=adapter_transformer_layers)
         
         if 'local_image' in self.video_compositions:
             self.local_image_embedding = nn.Sequential(
                     nn.Conv2d(3, concat_dim * 4, 3, padding=1),
                     nn.SiLU(),
-                    nn.AdaptiveAvgPool2d((128, 128)),
+                    nn.AdaptiveAvgPool2d((avgpool_dim, avgpool_dim)),
                     nn.Conv2d(concat_dim * 4, concat_dim * 4, 3, stride=2, padding=1),
                     nn.SiLU(),
                     nn.Conv2d(concat_dim * 4, concat_dim, 3, stride=2, padding=1))
-            self.local_image_embedding_after = Transformer_v2(heads=2, dim=concat_dim, dim_head_k=concat_dim, dim_head_v=concat_dim, dropout_atte = 0.05, mlp_dim=concat_dim, dropout_ffn = 0.05, depth=adapter_transformer_layers)
+            self.local_image_embedding_after = Transformer_v2(heads=2,
+                dim=concat_dim,
+                dim_head_k=concat_dim,
+                dim_head_v=concat_dim,
+                dropout_atte = 0.05,
+                mlp_dim=concat_dim,
+                dropout_ffn = 0.05,
+                depth=adapter_transformer_layers)
         
         ### Condition Dropout
         self.misc_dropout = DropPath(misc_dropout)
@@ -1462,7 +1514,8 @@ class UNetSD_temporal(nn.Module):
         
         assert self.inpainting or masked is None, 'inpainting is not supported'
 
-        batch, c, f, h, w= x.shape
+        # print(x.shape, single_sketch.shape)
+        batch, c, f, h, w = x.shape
         device = x.device
         self.batch = batch
 
@@ -1569,7 +1622,8 @@ class UNetSD_temporal(nn.Module):
             single_sketch = self.single_sketch_embedding(single_sketch)
 
             h = single_sketch.shape[2]
-            single_sketch = self.single_sketch_embedding_after(rearrange(single_sketch, '(b f) c h w -> (b h w) f c', b = batch))
+            single_sketch = rearrange(single_sketch, '(b f) c h w -> (b h w) f c', b = batch)
+            single_sketch = self.single_sketch_embedding_after(single_sketch)
             single_sketch = rearrange(single_sketch, '(b h w) f c -> b c f h w', b = batch, h = h)
 
             # 

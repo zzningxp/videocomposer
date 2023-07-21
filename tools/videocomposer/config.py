@@ -39,10 +39,10 @@ cfg.sketch_std = [0.229, 0.224, 0.225]
 cfg.max_words = 1000
 
 cfg.frame_lens = [
-    16,
-    16,
-    16,
-    16,
+    32,
+    32,
+    32,
+    32,
 ]
 cfg.feature_framerates = [
     4,
@@ -53,9 +53,11 @@ cfg.batch_sizes = {
     str(4):1,
     str(8):1,
     str(16):1,
+    str(32):1,
+    str(64):1,
 }
 
-cfg.chunk_size=64
+cfg.chunk_size = 64
 cfg.num_workers = 8
 cfg.prefetch_factor = 2
 cfg.seed = 8888
@@ -133,7 +135,7 @@ if cfg.resume_optimizer:
 # acceleration
 cfg.use_ema = True  
 # for debug, no ema
-if world_size<2:
+if world_size < 2:
     cfg.use_ema = False
 cfg.load_from = None
 
