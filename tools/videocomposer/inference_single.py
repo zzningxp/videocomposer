@@ -39,6 +39,7 @@ from fairscale.optim.grad_scaler import ShardedGradScaler
 from .datasets import VideoDataset
 import artist.ops as ops
 import artist.data as data
+import time
 
 from artist import DOWNLOAD_TO_CACHE
 from artist.models.clip import VisionTransformer
@@ -586,6 +587,7 @@ def worker(gpu, cfg):
         misc_data_list = torch.chunk(misc_data, misc_data.shape[0]//cfg.chunk_size,dim=0)
 
         with torch.no_grad():
+            s1 = time.time()
             decode_data = []
             for vd_data in video_data_list:
                 encoder_posterior = autoencoder.encode(vd_data)
@@ -593,6 +595,8 @@ def worker(gpu, cfg):
                 decode_data.append(tmp)
             video_data = torch.cat(decode_data,dim=0)
             video_data = rearrange(video_data, '(b f) c h w -> b c f h w', b = bs_vd)
+            s2 = time.time()
+            print("video input data autoencoder: {} s", s2 - s1)
 
             depth_data = []
             if 'depthmap' in cfg.video_compositions:
@@ -632,6 +636,7 @@ def worker(gpu, cfg):
             if 'single_sketch' in cfg.video_compositions:
                 single_sketch_data = sketch_data.clone()[:, :, :1].repeat(1, 1, frames_num, 1, 1)
 
+        s1 = time.time()
         # preprocess for input text descripts
         y = clip_encoder(caps).detach()  # [1, 77, 1024]
         y0 = y.clone()
@@ -647,6 +652,12 @@ def worker(gpu, cfg):
                     y_visual = clip_encoder_visual(ref_imgs).unsqueeze(1) # [1, 1, 1024]
                     y_visual0 = y_visual.clone()
 
+        s2 = time.time()
+        del clip_encoder
+        del clip_encoder_visual
+        
+        print("clip encoder: {} s", s2 - s1)
+        
         with torch.no_grad():
             # Log memory
             pynvml.nvmlInit()
@@ -662,7 +673,7 @@ def worker(gpu, cfg):
                     noise = rearrange(noise, '(b f) c h w->b c f h w', b = viz_num) 
                     noise = noise.contiguous()
                 else:
-                    noise=torch.randn_like(video_data[:viz_num])
+                    noise = torch.randn_like(video_data[:viz_num])
 
                 full_model_kwargs=[
                     {'y': y0[:viz_num],
@@ -693,6 +704,10 @@ def worker(gpu, cfg):
                 model_kwargs = prepare_model_kwargs(partial_keys = partial_keys,
                                         full_model_kwargs = full_model_kwargs,
                                         use_fps_condition = cfg.use_fps_condition)
+                
+                print("-- diffusion.ddim_sample_loop --")
+                s1 = time.time()
+
                 video_output = diffusion.ddim_sample_loop(
                     noise=noise_motion,
                     model=model.eval(),
@@ -701,7 +716,11 @@ def worker(gpu, cfg):
                     ddim_timesteps=cfg.ddim_timesteps,
                     eta=0.0)
                 
+                del model
+                s2 = time.time()
+                print(f'diffusion.ddim_sample_loop cost time {s2 - s1} s')
                 print("--")
+                
                 visualize_with_model_kwargs(model_kwargs = model_kwargs,
                     video_data = video_output,
                     autoencoder = autoencoder,
@@ -752,7 +771,7 @@ def visualize_with_model_kwargs(model_kwargs,
 
     bs_vd = video_data.shape[0]
     video_data = rearrange(video_data, 'b c f h w -> (b f) c h w')
-    chunk_size = min(16, video_data.shape[0])
+    chunk_size = min(8, video_data.shape[0])
     video_data_list = torch.chunk(video_data, video_data.shape[0]//chunk_size, dim=0)
     decode_data = []
     for vd_data in video_data_list:

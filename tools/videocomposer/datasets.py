@@ -73,13 +73,13 @@ def draw_motion_vectors(frame, motion_vectors):
             # cv2.arrowedLine(frame, start_pt, end_pt, (0, 0, 255), 2, cv2.LINE_AA, 0, 0.2)
     return frame
 
-def extract_motion_vectors(input_video,fps=4, dump=False, verbose=False, visual_mv=False):
-
+def extract_motion_vectors(input_video, fps=4, dump=False, verbose=False, visual_mv=False):
     if dump:
         now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         for child in ["frames", "motion_vectors"]:
             os.makedirs(os.path.join(f"out-{now}", child), exist_ok=True)
     temp = rand_name()
+
     # tmp_video = f'{temp}_{input_video}'
     tmp_video = os.path.join(input_video.split("/")[0], f'{temp}' +input_video.split("/")[-1])
     videocapture = cv2.VideoCapture(input_video)
@@ -157,14 +157,16 @@ def extract_motion_vectors(input_video,fps=4, dump=False, verbose=False, visual_
         frames.append(frame)
         mvs.append(mv)
         # mvs_visual.append(frame_save)
+
     if verbose:
         print("average dt: ", np.mean(times))
     cap.release()
 
+    # print("tmp_video: ", tmp_video)
     if os.path.exists(tmp_video):
         os.remove(tmp_video)
 
-    return frame_types,frames,mvs, mvs_visual
+    return frame_types,frames, mvs, mvs_visual
 
 
 class VideoDataset(Dataset):
@@ -262,14 +264,18 @@ class VideoDataset(Dataset):
         filename = video_key
         for _ in range(5):
             try:
-                frame_types,frames,mvs, mvs_visual = extract_motion_vectors(input_video=filename,fps=feature_framerate, visual_mv=visual_mv)
+                frame_types, frames,mvs, mvs_visual = extract_motion_vectors(input_video=filename,fps=feature_framerate, visual_mv=visual_mv)
                 # os.remove(filename)
                 break
             except Exception as e:
                 print('{} read video frames and motion vectors failed with error: {}'.format(video_key, e), flush=True)
 
         total_frames = len(frame_types)
+        if self.max_frames > total_frames:
+            self.max_frames = total_frames
+        print("debug", frame_types, total_frames, self.max_frames)
         start_indexs = np.where((np.array(frame_types)=='I') & (total_frames - np.arange(total_frames) >= self.max_frames))[0]
+        print("debug", start_indexs)
         start_index = np.random.choice(start_indexs)
         indices = np.arange(start_index, start_index+self.max_frames)
 
@@ -315,6 +321,7 @@ class VideoDataset(Dataset):
             misc_data[:len(frames), ...] = misc_imgs
             mv_data[:len(frames), ...] = mvs
         
+        print("video_key", video_key)
 
         ref_frame = vit_image  
 

@@ -516,8 +516,8 @@ class AutoencoderKL(nn.Module):
     def init_from_ckpt(self, path, ignore_keys=list()):
         sd = torch.load(path, map_location="cpu")["state_dict"]
         keys = list(sd.keys())
-        for key in keys:
-            print(key, sd[key].shape)
+        # for key in keys:
+        #     print(key, sd[key].shape)
         import collections
         sd_new = collections.OrderedDict()
         for k in keys:
@@ -531,7 +531,7 @@ class AutoencoderKL(nn.Module):
         sd = torch.load(path, map_location="cpu")["state_dict"]
         keys = list(sd.keys())
 
-        first_stage_model
+        # first_stage_model
         for k in keys:
             for ik in ignore_keys:
                 if k.startswith(ik):

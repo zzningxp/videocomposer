@@ -51,7 +51,7 @@ class Config(object):
         )
         parser.add_argument(
             '--input_video',
-            default='demo_video/video_8800.mp4',
+            default='',
             help='input video for full task, or motion vector of input videos',
             type=str,
         ),

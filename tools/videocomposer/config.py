@@ -27,7 +27,7 @@ cfg.hist_sigma = 10.0
 cfg.use_image_dataset = False
 cfg.alpha_img = 0.7
 
-cfg.resolution = 256
+cfg.resolution = 512 
 cfg.mean = [0.5, 0.5, 0.5]
 cfg.std = [0.5, 0.5, 0.5]
 
@@ -39,10 +39,10 @@ cfg.sketch_std = [0.229, 0.224, 0.225]
 cfg.max_words = 1000
 
 cfg.frame_lens = [
-    32,
-    32,
-    32,
-    32,
+    16,
+    16,
+    16,
+    16,
 ]
 cfg.feature_framerates = [
     4,
