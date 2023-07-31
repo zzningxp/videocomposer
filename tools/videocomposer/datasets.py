@@ -94,7 +94,7 @@ def extract_motion_vectors(input_video, fps=4, dump=False, verbose=False, visual
         fps = max(fps, 1)
     else:
         fps = int(16/(frames_num/fps_video)) + 1
-    ffmpeg_cmd = f'ffmpeg -threads 8 -loglevel error -i {input_video} -filter:v fps={fps} -c:v mpeg4 -f rawvideo {tmp_video}'
+    ffmpeg_cmd = f'ffmpeg -loglevel quiet -i {input_video} -threads 8  -filter:v fps={fps} -c:v mpeg4 -f rawvideo {tmp_video}'
 
     if os.path.exists(tmp_video):
         os.remove(tmp_video)

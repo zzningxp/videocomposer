@@ -483,11 +483,11 @@ def train(cfg_update, **kwargs):
             global_step += 1
 
         # After each epoch you optionally sample some demo images with evaluate() and save the model
-        # if accelerator.is_main_process:
-        #     pipeline = DDIMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
+        if accelerator.is_main_process:
+            pipeline = DDIMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
 
-        #     if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
-        #         evaluate(config, epoch, pipeline)
+            if (epoch + 1) % cfg.save_image_epochs == 0 or epoch == cfg.num_epochs - 1:
+                evaluate(cfg, epoch, pipeline)
 
-        #     if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
-        #         pipeline.save_pretrained(config.output_dir)
+            if (epoch + 1) % cfg.save_model_epochs == 0 or epoch == cfg.num_epochs - 1:
+                pipeline.save_pretrained(cfg.output_dir)
