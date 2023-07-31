@@ -1,0 +1,30 @@
+TASK_TYPE: TRAIN
+ENABLE: true
+DATASET: webvid10m
+DATAPATH: "./webvid/results_2M_val.csv"
+video_compositions: ['text', 'mask', 'depthmap', 'sketch', 'motion', 'image', 'local_image', 'single_sketch']
+guidances: ['y', 'depth', 'canny', 'masked', 'sketch', 'image', 'motion', 'local_image', 'single_sketch']
+vit_image_size: 224
+network_name: UNetSD_temporal
+resume: true
+resume_step: 228000
+num_workers: 1
+mvs_visual: False
+chunk_size: 1
+resume_checkpoint: "model_weights/non_ema_228000.pth"
+log_dir: 'outputs'
+num_steps: 1
+
+image_size : 128  # the generated image resolution
+train_batch_size : 16
+eval_batch_size : 16  # how many images to sample during evaluation
+num_epochs : 180
+gradient_accumulation_steps : 1
+learning_rate : 0.0001
+lr_warmup_steps : 500
+save_image_epochs : 2
+save_model_epochs : 30
+mixed_precision : "fp16"  # `no` for float32, `fp16` for automatic mixed precision
+
+overwrite_output_dir : True  # overwrite the old model when re-running the notebook
+seed : 0

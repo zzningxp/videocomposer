@@ -27,7 +27,7 @@ cfg.hist_sigma = 10.0
 cfg.use_image_dataset = False
 cfg.alpha_img = 0.7
 
-cfg.resolution = 512 
+cfg.resolution = 256 
 cfg.mean = [0.5, 0.5, 0.5]
 cfg.std = [0.5, 0.5, 0.5]
 
@@ -53,6 +53,7 @@ cfg.batch_sizes = {
     str(4):1,
     str(8):1,
     str(16):1,
+    str(20):1,
     str(32):1,
     str(64):1,
 }
@@ -78,7 +79,8 @@ cfg.p_zero = 0.9
 cfg.guide_scale = 6.0
 
 # stabel diffusion
-cfg.sd_checkpoint = 'v2-1_512-ema-pruned.ckpt'
+# cfg.sd_checkpoint = 'v2-1_512-ema-pruned.ckpt'
+cfg.sd_checkpoint = 'v1-5-pruned-emaonly.ckpt'
 
 
 # clip vision encoder

@@ -1,7 +1,10 @@
 # Fork Version for VideoComposer
 ## Update:
 
+0731: Add Training part initial code, and it is under debugging.
+
 0722: Resolve the CUDA memory limit of 512x512 resolution at 24G GPU.
+
 0722: Resolve the 16 frames limit, you can use 32/64 or more. However, the longer video fidelity is not guaranteed.
 
 ## VideoComposer

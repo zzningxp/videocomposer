@@ -232,9 +232,14 @@ class GaussianDiffusion(object):
 
         # diffusion process (TODO: clamp is inaccurate! Consider replacing the stride by explicit prev/next steps)
         steps = (1 + torch.arange(0, self.num_timesteps, self.num_timesteps // ddim_timesteps)).clamp(0, self.num_timesteps - 1).flip(0)
+        # print("noise size: ", noise.size())
+        # print("args: ", clamp, percentile, condition_fn, guide_scale, ddim_timesteps, eta)
+        # print("ddim_sample_loop steps, ", self.num_timesteps, steps)
+
         for step in steps:
             t = torch.full((b, ), step, dtype=torch.long, device=xt.device)
             xt, _ = self.ddim_sample(xt, t, model, model_kwargs, clamp, percentile, condition_fn, guide_scale, ddim_timesteps, eta)
+        # print("noise xt size: ", xt.size(), t.size())
         return xt
     
     @torch.no_grad()
@@ -352,9 +357,11 @@ class GaussianDiffusion(object):
                 eps_cache.pop(0)
         return xt
 
-    def loss(self, x0, t, model, model_kwargs={}, noise=None, weight = None, use_div_loss= False):
+    def loss(self, x0, t, model, model_kwargs={}, noise = None, weight = None, use_div_loss = False, guide_scale = None):
         noise = torch.randn_like(x0) if noise is None else noise # [80, 4, 8, 32, 32]
         xt = self.q_sample(x0, t, noise=noise)
+        
+        # print(type(t), t.device, xt.device)
 
         # compute loss
         if self.loss_type in ['kl', 'rescaled_kl']:
@@ -362,7 +369,19 @@ class GaussianDiffusion(object):
             if self.loss_type == 'rescaled_kl':
                 loss = loss * self.num_timesteps
         elif self.loss_type in ['mse', 'rescaled_mse', 'l1', 'rescaled_l1']: # self.loss_type: mse
-            out = model(xt, self._scale_timesteps(t), **model_kwargs)
+            if guide_scale is None:
+                out = model(xt, self._scale_timesteps(t), **model_kwargs)
+            else:
+                # classifier-free guidance
+                # (model_kwargs[0]: conditional kwargs; model_kwargs[1]: non-conditional kwargs)
+                assert isinstance(model_kwargs, list) and len(model_kwargs) == 2
+                y_out = model(xt, self._scale_timesteps(t), **model_kwargs[0])
+                u_out = model(xt, self._scale_timesteps(t), **model_kwargs[1])
+                dim = y_out.size(1) if self.var_type.startswith('fixed') else y_out.size(1) // 2
+                out = torch.cat([
+                    u_out[:, :dim] + guide_scale * (y_out[:, :dim] - u_out[:, :dim]),
+                    y_out[:, dim:]], dim=1) # guide_scale=9.0
+            # out = model(xt, self._scale_timesteps(t), **model_kwargs)
 
             # VLB for variation
             loss_vlb = 0.0

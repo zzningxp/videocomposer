@@ -4,6 +4,9 @@ import time
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 import torchvision.transforms as T
+import torchvision.transforms.functional as TF
+from torchvision.transforms.functional import InterpolationMode
+
 from collections import defaultdict
 import re
 import pickle
@@ -18,6 +21,7 @@ from skimage.color import rgb2lab, lab2rgb
 import datetime
 # ADD
 import os
+import pandas as pd
 from mvextractor.videocap import VideoCap
 import subprocess
 import binascii
@@ -50,7 +54,7 @@ def pre_caption(caption, max_words):
     return caption
 
 def random_resize(img, size):
-    return TF.resize(img, size, interpolation=random.choice([
+    return T.resize(img, size, interpolation=random.choice([
         InterpolationMode.BILINEAR,
         InterpolationMode.BICUBIC,
         InterpolationMode.LANCZOS]))
@@ -199,7 +203,35 @@ class VideoDataset(Dataset):
 
         self.mv_transforms = mv_transforms
 
-        self.video_cap_pairs = [[self.cfg.input_video, self.cfg.input_text_desc]]
+        self.train_flag = (cfg.TASK_TYPE == 'TRAIN')
+        if self.train_flag:
+            if self.cfg.DATASET == 'webvid10m':
+                csv_path = self.cfg.DATAPATH
+                video_path = os.path.dirname(csv_path) + "/data/videos/"
+                df = pd.read_csv(csv_path)
+                
+                idlist = df['videoid']
+                vc_pairs = []
+
+                for vid in idlist:
+                    pdf = df[df['videoid'] == vid]
+                    # print(vid, pdf, len(pdf))
+                    if len(pdf) > 0:
+                        for idx, row in pdf.iterrows():
+                            page_dir = str(row['page_dir'])
+                            text_desc = str(row['name'])
+                            vid_fp = os.path.join(video_path, page_dir, f'{vid}.mp4')
+                        
+                            if os.path.exists(vid_fp):
+                                p = [vid_fp, text_desc]
+                                vc_pairs.append(p)
+                
+                print(f"Loaded training dataset of video/text pairs: {len(vc_pairs)}")
+                self.video_cap_pairs = vc_pairs
+            else:
+                assert False
+        else:
+            self.video_cap_pairs = [[self.cfg.input_video, self.cfg.input_text_desc]]
         self.Vit_image_random_resize = T.Resize((vit_image_size, vit_image_size))
  
         self.SPECIAL_TOKEN = {"CLS_TOKEN": "<|startoftext|>", "SEP_TOKEN": "<|endoftext|>",
@@ -262,6 +294,7 @@ class VideoDataset(Dataset):
         # bucket, oss_key = ops.parse_oss_url(oss_path)
         # ops.get_object_to_file(bucket, oss_key, filename)
         filename = video_key
+        print("Read video file from: ", filename)
         for _ in range(5):
             try:
                 frame_types, frames,mvs, mvs_visual = extract_motion_vectors(input_video=filename,fps=feature_framerate, visual_mv=visual_mv)

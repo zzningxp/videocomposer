@@ -16,6 +16,7 @@ import logging
 from utils.config import Config
 from tools.videocomposer.inference_multi import inference_multi
 from tools.videocomposer.inference_single import inference_single
+from tools.videocomposer.train import train
 
 
 def main():
@@ -29,6 +30,9 @@ def main():
     elif hasattr(cfg, "TASK_TYPE") and cfg.TASK_TYPE == "SINGLE_TASK":
         logging.info("TASK TYPE: %s " %  cfg.TASK_TYPE)
         inference_single(cfg.cfg_dict)
+    elif hasattr(cfg, "TASK_TYPE") and cfg.TASK_TYPE == "TRAIN":
+        logging.info("TASK TYPE: %s " %  cfg.TASK_TYPE)
+        train(cfg.cfg_dict)
     else:
         logging.info('Not suport task %s' % (cfg.TASK_TYPE))
 

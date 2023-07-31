@@ -1,8 +1,7 @@
 import os
-import os.path as osp
 import sys
 # append parent path to environment
-sys.path.insert(0, '/'.join(osp.realpath(__file__).split('/')[:-4]))
+sys.path.insert(0, '/'.join(os.path.realpath(__file__).split('/')[:-4]))
 import logging
 import numpy as np
 # import copy
@@ -26,10 +25,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch.nn.parallel import DistributedDataParallel
 from torch.nn.utils import clip_grad_norm_
 import open_clip
-from easydict import EasyDict
-from collections import defaultdict
 from functools import partial
-from io import BytesIO
 from PIL import Image
 from torchvision.transforms.functional import InterpolationMode
 from fairscale.nn.data_parallel import ShardedDataParallel
@@ -52,7 +48,7 @@ from .autoencoder import  AutoencoderKL, DiagonalGaussianDistribution
 from tools.annotator.canny import CannyDetector
 from tools.annotator.sketch import pidinet_bsd, sketch_simplification_gan
 # from tools.annotator.histogram import Palette
-from utils.config import Config
+# from utils.config import Config
  
 
 def beta_schedule(schedule, num_timesteps=1000, init_beta=None, last_beta=None):
@@ -371,8 +367,8 @@ def worker(gpu, cfg):
     os.makedirs(log_dir, exist_ok=True)
     cfg.log_dir = log_dir
     if cfg.rank == 0:
-        name = osp.basename(cfg.log_dir)
-        cfg.log_file = osp.join(cfg.log_dir, '{}_rank{}.log'.format(name, cfg.rank))
+        name = os.path.basename(cfg.log_dir)
+        cfg.log_file = os.path.join(cfg.log_dir, '{}_rank{}.log'.format(name, cfg.rank))
         reload(logging)
         logging.basicConfig(
             level=logging.INFO,
@@ -541,10 +537,13 @@ def worker(gpu, cfg):
 
     # global variables
     viz_num = cfg.batch_size
+    print("dataloader size", len(dataloader))
     for step, batch in enumerate(dataloader):
         model.eval() 
 
         caps = batch[1]; del batch[1]
+        print("caps: ", caps)
+        
         batch = ops.to_device(batch, gpu, non_blocking=True)
         if cfg.max_frames == 1 and cfg.use_image_dataset:
             ref_imgs, video_data, misc_data, mask, mv_data = batch
@@ -578,7 +577,7 @@ def worker(gpu, cfg):
         
         ### encode the video_data
         bs_vd = video_data.shape[0]
-        video_data_origin = video_data.clone() 
+        video_data_origin = video_data.clone()
         video_data = rearrange(video_data, 'b f c h w -> (b f) c h w')
         misc_data = rearrange(misc_data, 'b f c h w -> (b f) c h w')
         # video_data_origin = video_data.clone() 
@@ -593,10 +592,10 @@ def worker(gpu, cfg):
                 encoder_posterior = autoencoder.encode(vd_data)
                 tmp = get_first_stage_encoding(encoder_posterior).detach()
                 decode_data.append(tmp)
-            video_data = torch.cat(decode_data,dim=0)
+            video_data = torch.cat(decode_data, dim=0)
             video_data = rearrange(video_data, '(b f) c h w -> b c f h w', b = bs_vd)
             s2 = time.time()
-            print("video input data autoencoder: {} s", s2 - s1)
+            print(f"video input data autoencoder: {s2 - s1} s")
 
             depth_data = []
             if 'depthmap' in cfg.video_compositions:
@@ -604,6 +603,7 @@ def worker(gpu, cfg):
                     depth = midas(misc_imgs.sub(0.5).div_(0.5).to(memory_format=torch.channels_last).half())
                     depth = (depth / cfg.depth_std).clamp_(0, cfg.depth_clamp)
                     depth_data.append(depth)
+                    # print("misc_imgs ", torch.sum(misc_imgs), torch.sum(depth))
                 depth_data = torch.cat(depth_data, dim = 0)
                 depth_data = rearrange(depth_data, '(b f) c h w -> b c f h w', b = bs_vd)
             
@@ -656,7 +656,7 @@ def worker(gpu, cfg):
         del clip_encoder
         del clip_encoder_visual
         
-        print("clip encoder: {} s", s2 - s1)
+        print(f"clip encoder: {s2 - s1} s")
         
         with torch.no_grad():
             # Log memory
@@ -697,6 +697,11 @@ def worker(gpu, cfg):
                     'single_sketch': None if len(single_sketch_data) == 0 else single_sketch_data[:viz_num],
                     'fps': fps[:viz_num]}
                 ]
+                for key in full_model_kwargs[0]:
+                    v = full_model_kwargs[0][key]
+                    if v != None:
+                        print(key, v.shape) #, torch.sum(v))
+                
                 # Save generated videos 
                 #--------------------------------------
                 partial_keys = cfg.guidances
@@ -715,6 +720,8 @@ def worker(gpu, cfg):
                     guide_scale=9.0,
                     ddim_timesteps=cfg.ddim_timesteps,
                     eta=0.0)
+                # video_output : batch, channel, frame, h, w
+                
                 
                 del model
                 s2 = time.time()
@@ -771,7 +778,7 @@ def visualize_with_model_kwargs(model_kwargs,
 
     bs_vd = video_data.shape[0]
     video_data = rearrange(video_data, 'b c f h w -> (b f) c h w')
-    chunk_size = min(8, video_data.shape[0])
+    chunk_size = min(1, video_data.shape[0])
     video_data_list = torch.chunk(video_data, video_data.shape[0]//chunk_size, dim=0)
     decode_data = []
     for vd_data in video_data_list:
@@ -782,7 +789,7 @@ def visualize_with_model_kwargs(model_kwargs,
     ori_video = ori_video[:viz_num]
     
     oss_key = os.path.join(cfg.log_dir, f"rank_{cfg.world_size}-{cfg.rank}.gif")
-    text_key = osp.join(cfg.log_dir, 'text_description.txt')
+    text_key = os.path.join(cfg.log_dir, 'text_description.txt')
     
     # Save videos and text inputs.
     try:

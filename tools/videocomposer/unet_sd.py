@@ -202,8 +202,8 @@ class MemoryEfficientCrossAttention(nn.Module):
     # https://github.com/MatthieuTPHR/diffusers/blob/d80b531ff8060ec1ea982b65a1b8df70f73aa67c/src/diffusers/models/attention.py#L223
     def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dropout=0.0):
         super().__init__()
-        print(f"Setting up {self.__class__.__name__}. Query dim is {query_dim}, context_dim is {context_dim} and using "
-              f"{heads} heads.")
+        # print(f"Setting up {self.__class__.__name__}. Query dim is {query_dim}, context_dim is {context_dim} and using "
+        #       f"{heads} heads.")
         inner_dim = dim_head * heads
         context_dim = default(context_dim, query_dim)
 
@@ -1128,9 +1128,6 @@ class TemporalConvBlock_v2(nn.Module):
         return x
    
 
-
-
-
 class UNetSD_temporal(nn.Module):
 
     def __init__(self,
@@ -1511,7 +1508,6 @@ class UNetSD_temporal(nn.Module):
         mask_last_frame_num = 0  # mask last frame num
         ):
 
-        
         assert self.inpainting or masked is None, 'inpainting is not supported'
 
         # print(x.shape, single_sketch.shape)
@@ -1533,7 +1529,6 @@ class UNetSD_temporal(nn.Module):
         else:
             time_rel_pos_bias = None
         
-
         # all-zero and all-keep masks
         zero = torch.zeros(batch, dtype=torch.bool).to(x.device)
         keep = torch.zeros(batch, dtype=torch.bool).to(x.device)
@@ -1546,7 +1541,6 @@ class UNetSD_temporal(nn.Module):
         assert not (zero & keep).any()
         misc_dropout = partial(self.misc_dropout, zero = zero, keep = keep)
 
-
         concat = x.new_zeros(batch, self.concat_dim, f, h, w)
         if depth is not None:
             ### DropPath mask
@@ -1558,7 +1552,6 @@ class UNetSD_temporal(nn.Module):
             # 
             depth = rearrange(depth, '(b h w) f c -> b c f h w', b = batch, h = h)
             concat = concat + misc_dropout(depth)
-            
             
         # local_image_embedding
         if local_image is not None:
@@ -1589,7 +1582,6 @@ class UNetSD_temporal(nn.Module):
             else:
                 concat = concat + misc_dropout(motion)
             
-
         if canny is not None:
             ### DropPath mask
             canny = rearrange(canny, 'b c f h w -> (b f) c h w')
@@ -1602,8 +1594,6 @@ class UNetSD_temporal(nn.Module):
             # 
             concat = concat + misc_dropout(canny)
             
-            
-        
         if sketch is not None:
             ### DropPath mask
             sketch = rearrange(sketch, 'b c f h w -> (b f) c h w')
@@ -1629,9 +1619,6 @@ class UNetSD_temporal(nn.Module):
             # 
             concat = concat + misc_dropout(single_sketch)
             
-        
-        
-
         if masked is not None:
             ### DropPath mask
             masked = rearrange(masked, 'b c f h w -> (b f) c h w')
@@ -1644,7 +1631,7 @@ class UNetSD_temporal(nn.Module):
             # 
             concat = concat + misc_dropout(masked)
             
-            
+        print(concat.size(), x.size())
 
         x = torch.cat([x, concat], dim=1)
         x = rearrange(x, 'b c f h w -> (b f) c h w')
