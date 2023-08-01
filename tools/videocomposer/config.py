@@ -124,10 +124,10 @@ cfg.fix_weight = False
 
 ## Default resume
 # 
-cfg.resume = True
-cfg.resume_step = 148000
-cfg.resume_check_dir = '.'
-cfg.resume_checkpoint = os.path.join(cfg.resume_check_dir,f'step_{cfg.resume_step}/non_ema_{cfg.resume_step}.pth')
+# cfg.resume = True
+# cfg.resume_step = 148000
+# cfg.resume_check_dir = '.'
+# cfg.resume_checkpoint = os.path.join(cfg.resume_check_dir,f'step_{cfg.resume_step}/non_ema_{cfg.resume_step}.pth')
 #
 cfg.resume_optimizer = False
 if cfg.resume_optimizer:

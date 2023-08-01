@@ -213,7 +213,9 @@ def train(cfg_update, **kwargs):
 
     # Load checkpoint
     resume_step = 1
-    if cfg.resume and cfg.resume_checkpoint:
+    if not cfg.resume:
+        pass
+    elif cfg.resume and cfg.resume_checkpoint:
         if hasattr(cfg, "text_to_video_pretrain") and cfg.text_to_video_pretrain:
             ss = torch.load(DOWNLOAD_TO_CACHE(cfg.resume_checkpoint))
             ss = {key:p for key,p in ss.items() if 'input_blocks.0.0' not in key}
