@@ -18,3 +18,4 @@ outputs/
 *.pyc
 model_weights/*
 work_dirs/*
+*.log

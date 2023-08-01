@@ -44,22 +44,6 @@ def make_grid(images, rows, cols):
         grid.paste(image, box=(i % cols * w, i // cols * h))
     return grid
 
-def evaluate(config, epoch, pipeline):
-    # Sample some images from random noise (this is the backward diffusion process).
-    # The default pipeline output type is `List[PIL.Image]`
-    images = pipeline(
-        batch_size=config.eval_batch_size,
-        generator=torch.manual_seed(config.seed),
-    ).images
-
-    # Make a grid out of the images
-    image_grid = make_grid(images, rows=4, cols=4)
-
-    # Save the images
-    test_dir = os.path.join(config.output_dir, "samples")
-    os.makedirs(test_dir, exist_ok=True)
-    image_grid.save(f"{test_dir}/{epoch:04d}.png")
-
 def train(cfg_update, **kwargs):
     cfg.update(**kwargs)
     
@@ -105,6 +89,10 @@ def train(cfg_update, **kwargs):
     cfg.max_frames = cfg.frame_lens[cfg.rank % (l1*l2)// l2]
     # print(cfg.batch_sizes)
     cfg.batch_size = cfg.batch_sizes[str(cfg.max_frames)]
+    
+    print("num_epochs : ", cfg.num_epochs)
+    print("batch_size : ", cfg.batch_size)
+    print("max_frames : ", cfg.max_frames)
 
     infer_trans = data.Compose([
         data.CenterCropV2(size=cfg.resolution),
@@ -288,7 +276,6 @@ def train(cfg_update, **kwargs):
     viz_num = cfg.batch_size
 
     # Now you train the model
-    print(cfg.num_epochs)
     
     for epoch in range(cfg.num_epochs):
         # tqdm derives from the Arabic word taqaddum (تقدّم) which can mean "progress," and is an abbreviation for "I love you so much" in Spanish (te quiero demasiado).
@@ -409,7 +396,6 @@ def train(cfg_update, **kwargs):
 
             s2 = time.time()
 
-            # Sample images (DDIM)
             with amp.autocast(enabled=cfg.use_fp16):
                 if cfg.share_noise:
                     b, c, f, h, w = video_data.shape
@@ -484,10 +470,8 @@ def train(cfg_update, **kwargs):
 
         # After each epoch you optionally sample some demo images with evaluate() and save the model
         if accelerator.is_main_process:
-            pipeline = DDIMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
-
-            if (epoch + 1) % cfg.save_image_epochs == 0 or epoch == cfg.num_epochs - 1:
-                evaluate(cfg, epoch, pipeline)
-
             if (epoch + 1) % cfg.save_model_epochs == 0 or epoch == cfg.num_epochs - 1:
-                pipeline.save_pretrained(cfg.output_dir)
+                save_path = os.path.join(cfg.output_dir, f"ckpt_{global_step}_e{epoch}.pth")
+                torch.save(model.state_dict(), save_path)
+                logging.info(f'Successfully save step {global_step} model to {save_path}')
+
