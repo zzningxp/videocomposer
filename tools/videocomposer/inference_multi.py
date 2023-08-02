@@ -488,11 +488,14 @@ def worker(gpu, cfg):
     resume_step = 1
     if cfg.resume and cfg.resume_checkpoint:
         if hasattr(cfg, "text_to_video_pretrain") and cfg.text_to_video_pretrain:
+            print("text_to_video_pretrain", )
             ss = torch.load(DOWNLOAD_TO_CACHE(cfg.resume_checkpoint))
             ss = {key:p for key,p in ss.items() if 'input_blocks.0.0' not in key}
             model.load_state_dict(ss,strict=False)
         else:
-            model.load_state_dict(torch.load(DOWNLOAD_TO_CACHE(cfg.resume_checkpoint), map_location='cpu'),strict=False)
+            print("load_state_dict", )
+            # resume_checkpoint = DOWNLOAD_TO_CACHE()
+            model.load_state_dict(torch.load(cfg.resume_checkpoint, map_location='cpu'),strict=False)
         if cfg.resume_step:
             resume_step = cfg.resume_step
 

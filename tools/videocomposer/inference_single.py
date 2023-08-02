@@ -507,15 +507,18 @@ def worker(gpu, cfg):
     resume_step = 1
     if cfg.resume and cfg.resume_checkpoint:
         if hasattr(cfg, "text_to_video_pretrain") and cfg.text_to_video_pretrain:
+            print("text_to_video_pretrain", )
             ss = torch.load(DOWNLOAD_TO_CACHE(cfg.resume_checkpoint))
             ss = {key:p for key,p in ss.items() if 'input_blocks.0.0' not in key}
             model.load_state_dict(ss,strict=False)
         else:
-            model.load_state_dict(torch.load(DOWNLOAD_TO_CACHE(cfg.resume_checkpoint), map_location='cpu'),strict=False)
+            print("load_state_dict", cfg.resume_checkpoint)
+            # resume_checkpoint = DOWNLOAD_TO_CACHE()
+            model.load_state_dict(torch.load(cfg.resume_checkpoint, map_location='cpu'),strict=False)
         if cfg.resume_step:
             resume_step = cfg.resume_step
         
-        logging.info(f'Successfully load step {resume_step} model from {cfg.resume_checkpoint}')
+        logging.info(f'Successfully load step model from {cfg.resume_checkpoint}')
         torch.cuda.empty_cache()
     else:
         logging.error(f'The checkpoint file {cfg.resume_checkpoint} is wrong')
@@ -697,10 +700,10 @@ def worker(gpu, cfg):
                     'single_sketch': None if len(single_sketch_data) == 0 else single_sketch_data[:viz_num],
                     'fps': fps[:viz_num]}
                 ]
-                for key in full_model_kwargs[0]:
-                    v = full_model_kwargs[0][key]
-                    if v != None:
-                        print(key, v.shape) #, torch.sum(v))
+                # for key in full_model_kwargs[0]:
+                #     v = full_model_kwargs[0][key]
+                #     if v != None:
+                #         print(key, v.shape) #, torch.sum(v))
                 
                 # Save generated videos 
                 #--------------------------------------
@@ -741,6 +744,7 @@ def worker(gpu, cfg):
 
     if cfg.rank == 0:
         # send a sign to oss to indicate the training is completed
+        print(cfg.resume_checkpoint)
         logging.info('Congratulations! The inference is completed!')
     
     # synchronize to finish some processes

@@ -20,7 +20,7 @@ from tqdm.auto import tqdm
 from importlib import reload
 
 from .datasets import VideoDataset
-from .inference_single import random_resize, beta_schedule, make_masked_images, get_first_stage_encoding, prepare_model_kwargs, CenterCrop
+from .inference_single import random_resize, beta_schedule, make_masked_images, get_first_stage_encoding, CenterCrop
 from .inference_single import FrozenOpenCLIPEmbedder, FrozenOpenCLIPVisualEmbedder
 from .config import cfg
 # from utils.config import Config
@@ -217,15 +217,18 @@ def train(cfg_update, **kwargs):
         pass
     elif cfg.resume and cfg.resume_checkpoint:
         if hasattr(cfg, "text_to_video_pretrain") and cfg.text_to_video_pretrain:
+            print("text_to_video_pretrain", )
             ss = torch.load(DOWNLOAD_TO_CACHE(cfg.resume_checkpoint))
             ss = {key:p for key,p in ss.items() if 'input_blocks.0.0' not in key}
             model.load_state_dict(ss,strict=False)
         else:
-            model.load_state_dict(torch.load(DOWNLOAD_TO_CACHE(cfg.resume_checkpoint), map_location='cpu'),strict=False)
+            print("load_state_dict", cfg.resume_checkpoint)
+            # resume_checkpoint = DOWNLOAD_TO_CACHE()
+            model.load_state_dict(torch.load(cfg.resume_checkpoint, map_location='cpu'),strict=False)
         if cfg.resume_step:
             resume_step = cfg.resume_step
         
-        logging.info(f'Successfully load step {resume_step} model from {cfg.resume_checkpoint}')
+        logging.info(f'Successfully load step model from {cfg.resume_checkpoint}')
         torch.cuda.empty_cache()
     else:
         logging.error(f'The checkpoint file {cfg.resume_checkpoint} is wrong')
@@ -253,7 +256,9 @@ def train(cfg_update, **kwargs):
     )
 
     # Initialize accelerator and tensorboard logging
-    cfg.output_dir = os.path.join("./work_dirs/", cfg.DATASET, os.path.basename(cfg.DATAPATH))
+    pathstr = os.path.splitext(os.path.basename(cfg.DATAPATH))[0] + "-" + time.strftime('%y%m%d-%H%M', time.localtime(time.time()))
+    cfg.output_dir = os.path.join("./work_dirs/", pathstr)
+
     accelerator = Accelerator(
         mixed_precision=cfg.mixed_precision,
         gradient_accumulation_steps=cfg.gradient_accumulation_steps,
@@ -408,8 +413,7 @@ def train(cfg_update, **kwargs):
                 else:
                     noise = torch.randn_like(video_data[:viz_num])
 
-                full_model_kwargs=[
-                    {'y': y0[:viz_num],
+                model_kwargs= {'y': y0[:viz_num],
                     "local_image": None if len(image_local) == 0 else image_local[:viz_num],
                     'image': None if len(y_visual) == 0 else y_visual0[:viz_num],
                     'depth': None if len(depth_data) == 0 else depth_data[:viz_num],
@@ -418,24 +422,7 @@ def train(cfg_update, **kwargs):
                     'masked': None if len(masked_video) == 0 else masked_video[:viz_num],
                     'motion': None if len(mv_data_video) == 0 else mv_data_video[:viz_num],
                     'single_sketch': None if len(single_sketch_data) == 0 else single_sketch_data[:viz_num],
-                    'fps': fps[:viz_num]}, 
-                    {'y': zero_y.repeat(viz_num,1,1) if not cfg.use_fps_condition else torch.zeros_like(y0)[:viz_num],
-                    "local_image": None if len(image_local) == 0 else image_local[:viz_num],
-                    'image': None if len(y_visual) == 0 else torch.zeros_like(y_visual0[:viz_num]),
-                    'depth': None if len(depth_data) == 0 else depth_data[:viz_num],
-                    'canny': None if len(canny_data) == 0 else canny_data[:viz_num],
-                    'sketch': None if len(sketch_data) == 0 else sketch_data[:viz_num],
-                    'masked': None if len(masked_video) == 0 else masked_video[:viz_num],
-                    'motion': None if len(mv_data_video) == 0 else mv_data_video[:viz_num],
-                    'single_sketch': None if len(single_sketch_data) == 0 else single_sketch_data[:viz_num],
                     'fps': fps[:viz_num]}
-                ]
-                
-                partial_keys = cfg.guidances
-                noise_motion = noise.clone()
-                model_kwargs = prepare_model_kwargs(partial_keys = partial_keys,
-                                        full_model_kwargs = full_model_kwargs,
-                                        use_fps_condition = cfg.use_fps_condition)
                 
             timesteps = torch.LongTensor([50])
             noise_scheduler = DDIMScheduler(num_train_timesteps=1000)
@@ -449,14 +436,7 @@ def train(cfg_update, **kwargs):
                 # Predict the noise residual
                 # loss(self, x0, t, model, model_kwargs={}, noise=None, weight = None, use_div_loss= False):
 
-                loss = diffusion.loss(
-                    x0=noise,
-                    t=timesteps,
-                    model=model.eval(),
-                    model_kwargs=model_kwargs,
-                    noise=noise_motion,
-                    guide_scale=9.0
-                    )
+                loss = diffusion.loss(x0=noise, t=timesteps, model=model.eval(), model_kwargs=model_kwargs)
                 accelerator.backward(loss)
 
                 accelerator.clip_grad_norm_(model.parameters(), 1.0)

@@ -78,6 +78,11 @@ class Config(object):
             type=str,
         ),
         parser.add_argument(
+            '--resume_checkpoint',
+            default='model_weights/non_ema_228000.pth',
+            type=str,
+        ),
+        parser.add_argument(
             "opts",
             help="other configurations",
             default=None,

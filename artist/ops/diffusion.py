@@ -369,19 +369,7 @@ class GaussianDiffusion(object):
             if self.loss_type == 'rescaled_kl':
                 loss = loss * self.num_timesteps
         elif self.loss_type in ['mse', 'rescaled_mse', 'l1', 'rescaled_l1']: # self.loss_type: mse
-            if guide_scale is None:
-                out = model(xt, self._scale_timesteps(t), **model_kwargs)
-            else:
-                # classifier-free guidance
-                # (model_kwargs[0]: conditional kwargs; model_kwargs[1]: non-conditional kwargs)
-                assert isinstance(model_kwargs, list) and len(model_kwargs) == 2
-                y_out = model(xt, self._scale_timesteps(t), **model_kwargs[0])
-                u_out = model(xt, self._scale_timesteps(t), **model_kwargs[1])
-                dim = y_out.size(1) if self.var_type.startswith('fixed') else y_out.size(1) // 2
-                out = torch.cat([
-                    u_out[:, :dim] + guide_scale * (y_out[:, :dim] - u_out[:, :dim]),
-                    y_out[:, dim:]], dim=1) # guide_scale=9.0
-            # out = model(xt, self._scale_timesteps(t), **model_kwargs)
+            out = model(xt, self._scale_timesteps(t), **model_kwargs)
 
             # VLB for variation
             loss_vlb = 0.0

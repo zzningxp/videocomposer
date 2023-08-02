@@ -15,6 +15,5 @@ resume_step: 228000
 num_workers: 1
 mvs_visual: False
 chunk_size: 1
-resume_checkpoint: "model_weights/non_ema_228000.pth"
 log_dir: 'outputs'
 num_steps: 1
