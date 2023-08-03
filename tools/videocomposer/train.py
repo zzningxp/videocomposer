@@ -20,7 +20,7 @@ from tqdm.auto import tqdm
 from importlib import reload
 
 from .datasets import VideoDataset
-from .inference_single import random_resize, beta_schedule, make_masked_images, get_first_stage_encoding, CenterCrop
+from .inference_single import random_resize, beta_schedule, make_masked_images, get_first_stage_encoding, prepare_model_kwargs, CenterCrop
 from .inference_single import FrozenOpenCLIPEmbedder, FrozenOpenCLIPVisualEmbedder
 from .config import cfg
 # from utils.config import Config
@@ -413,7 +413,8 @@ def train(cfg_update, **kwargs):
                 else:
                     noise = torch.randn_like(video_data[:viz_num])
 
-                model_kwargs= {'y': y0[:viz_num],
+                full_model_kwargs=[
+                    {'y': y0[:viz_num],
                     "local_image": None if len(image_local) == 0 else image_local[:viz_num],
                     'image': None if len(y_visual) == 0 else y_visual0[:viz_num],
                     'depth': None if len(depth_data) == 0 else depth_data[:viz_num],
@@ -422,8 +423,33 @@ def train(cfg_update, **kwargs):
                     'masked': None if len(masked_video) == 0 else masked_video[:viz_num],
                     'motion': None if len(mv_data_video) == 0 else mv_data_video[:viz_num],
                     'single_sketch': None if len(single_sketch_data) == 0 else single_sketch_data[:viz_num],
+                    'fps': fps[:viz_num]}, 
+                    {'y': zero_y.repeat(viz_num,1,1) if not cfg.use_fps_condition else torch.zeros_like(y0)[:viz_num],
+                    "local_image": None if len(image_local) == 0 else image_local[:viz_num],
+                    'image': None if len(y_visual) == 0 else torch.zeros_like(y_visual0[:viz_num]),
+                    'depth': None if len(depth_data) == 0 else depth_data[:viz_num],
+                    'canny': None if len(canny_data) == 0 else canny_data[:viz_num],
+                    'sketch': None if len(sketch_data) == 0 else sketch_data[:viz_num],
+                    'masked': None if len(masked_video) == 0 else masked_video[:viz_num],
+                    'motion': None if len(mv_data_video) == 0 else mv_data_video[:viz_num],
+                    'single_sketch': None if len(single_sketch_data) == 0 else single_sketch_data[:viz_num],
                     'fps': fps[:viz_num]}
+                ]
                 
+                partial_keys = cfg.guidances
+                noise_motion = noise.clone()
+                model_kwargs = prepare_model_kwargs(partial_keys = partial_keys,
+                                        full_model_kwargs = full_model_kwargs,
+                                        use_fps_condition = cfg.use_fps_condition)
+                                    
+                x0 = diffusion.ddim_sample_loop(
+                    noise=noise_motion,
+                    model=model.eval(),
+                    model_kwargs=model_kwargs,
+                    guide_scale=9.0,
+                    ddim_timesteps=cfg.ddim_timesteps,
+                    eta=0.0)
+
             timesteps = torch.LongTensor([50])
             noise_scheduler = DDIMScheduler(num_train_timesteps=1000)
             # noisy_image = noise_scheduler.add_noise(sample_image, noise, timesteps)
@@ -436,7 +462,8 @@ def train(cfg_update, **kwargs):
                 # Predict the noise residual
                 # loss(self, x0, t, model, model_kwargs={}, noise=None, weight = None, use_div_loss= False):
 
-                loss = diffusion.loss(x0=noise, t=timesteps, model=model.eval(), model_kwargs=model_kwargs)
+                # loss = diffusion.loss(x0=noise, t=timesteps, model=model.eval(), model_kwargs=model_kwargs, noise=noise_motion, guide_scale=9.0)
+                loss = diffusion.loss(x0=x0, t=timesteps, model=model.eval(), model_kwargs=model_kwargs[0])
                 accelerator.backward(loss)
 
                 accelerator.clip_grad_norm_(model.parameters(), 1.0)

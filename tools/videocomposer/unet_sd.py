@@ -1631,7 +1631,7 @@ class UNetSD_temporal(nn.Module):
             # 
             concat = concat + misc_dropout(masked)
             
-        print(concat.size(), x.size())
+        # print(concat.size(), x.size())
 
         x = torch.cat([x, concat], dim=1)
         x = rearrange(x, 'b c f h w -> (b f) c h w')
