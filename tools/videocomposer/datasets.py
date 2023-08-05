@@ -1,4 +1,3 @@
-import os.path as osp
 import torch
 import time
 import torch.nn.functional as F
@@ -85,7 +84,8 @@ def extract_motion_vectors(input_video, fps=4, dump=False, verbose=False, visual
     temp = rand_name()
 
     # tmp_video = f'{temp}_{input_video}'
-    tmp_video = os.path.join(input_video.split("/")[0], f'{temp}' +input_video.split("/")[-1])
+    # tmp_video = os.path.join(input_video.split("/")[0], f'{temp}' +input_video.split("/")[-1])
+    tmp_video = os.path.join('outputs', f'{temp}' +input_video.split("/")[-1])
     videocapture = cv2.VideoCapture(input_video)
     frames_num = videocapture.get(cv2.CAP_PROP_FRAME_COUNT)
     fps_video =videocapture.get(cv2.CAP_PROP_FPS)
@@ -95,15 +95,20 @@ def extract_motion_vectors(input_video, fps=4, dump=False, verbose=False, visual
     else:
         fps = int(16/(frames_num/fps_video)) + 1
     ffmpeg_cmd = f'ffmpeg -loglevel quiet -i {input_video} -threads 8  -filter:v fps={fps} -c:v mpeg4 -f rawvideo {tmp_video}'
+    # ffmpeg_cmd = f'ffmpeg -loglevel quiet -i {input_video} -threads 8 -vf scale=600:-1,pad=600:600:0:0:black,drawtext=fontcolor=white:fontsize=100:fontfile=/data/DejaVuSans.ttf:text="123456":x=100:y=100,fps={fps} -c:v mpeg4 -f rawvideo {tmp_video} '
+    # ffmpeg_cmd = f'ffmpeg -loglevel quiet -i {input_video} -threads 8 -vf scale=600:-1,pad=600:600:0:0:black,fps={fps} -c:v mpeg4 -f rawvideo {tmp_video} '
 
     if os.path.exists(tmp_video):
         os.remove(tmp_video)
     
+    print(ffmpeg_cmd)
     subprocess.run(args=ffmpeg_cmd,shell=True,timeout=120)
 
     cap = VideoCap()
     # open the video file
     ret = cap.open(tmp_video)
+    # print(ret)
+    # print(tmp_video, os.path.exists(tmp_video))
     if not ret:
         raise RuntimeError(f"Could not open {tmp_video}")
     
@@ -294,10 +299,10 @@ class VideoDataset(Dataset):
         # bucket, oss_key = ops.parse_oss_url(oss_path)
         # ops.get_object_to_file(bucket, oss_key, filename)
         filename = video_key
-        print("Read video file from: ", filename)
+        # print("Read video file from: ", filename)
         for _ in range(5):
             try:
-                frame_types, frames,mvs, mvs_visual = extract_motion_vectors(input_video=filename,fps=feature_framerate, visual_mv=visual_mv)
+                frame_types, frames, mvs, mvs_visual = extract_motion_vectors(input_video=filename,fps=feature_framerate, visual_mv=visual_mv)
                 # os.remove(filename)
                 break
             except Exception as e:
@@ -306,10 +311,11 @@ class VideoDataset(Dataset):
         total_frames = len(frame_types)
         if self.max_frames > total_frames:
             self.max_frames = total_frames
-        print("debug", frame_types, total_frames, self.max_frames)
+        # print("debug", frame_types, total_frames, self.max_frames)
         start_indexs = np.where((np.array(frame_types)=='I') & (total_frames - np.arange(total_frames) >= self.max_frames))[0]
+        start_index = np.random.choice(start_indexs) ## cut from any random place to get the input video clip
         print("debug", start_indexs)
-        start_index = np.random.choice(start_indexs)
+        
         indices = np.arange(start_index, start_index+self.max_frames)
 
         # note frames are in BGR mode, need to trans to RGB mode

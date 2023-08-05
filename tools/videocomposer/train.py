@@ -7,7 +7,7 @@ from copy import deepcopy, copy
 
 import torch
 from diffusers import DDIMPipeline, DDIMScheduler
-from diffusers.optimization import get_cosine_schedule_with_warmup
+from diffusers.optimization import get_cosine_schedule_with_warmup, get_constant_schedule
 import torch.nn.functional as F
 import torch.distributed as dist
 import torchvision.transforms as T
@@ -88,7 +88,8 @@ def train(cfg_update, **kwargs):
     l2 = len(cfg.feature_framerates)
     cfg.max_frames = cfg.frame_lens[cfg.rank % (l1*l2)// l2]
     # print(cfg.batch_sizes)
-    cfg.batch_size = cfg.batch_sizes[str(cfg.max_frames)]
+    # cfg.batch_size = cfg.batch_sizes[str(cfg.max_frames)]
+    cfg.batch_size = cfg.train_batch_size
     
     print("num_epochs : ", cfg.num_epochs)
     print("batch_size : ", cfg.batch_size)
@@ -139,20 +140,8 @@ def train(cfg_update, **kwargs):
     black_image_feature = torch.zeros_like(black_image_feature) # for old
 
     frame_in = None
-    if cfg.read_image:
-        image_key = cfg.image_path # 
-        frame = Image.open(open(image_key, mode='rb')).convert('RGB')
-        frame_in = misc_transforms([frame]) 
-    
     frame_sketch = None
-    if cfg.read_sketch:
-        sketch_key = cfg.sketch_path # 
-        frame_sketch = Image.open(open(sketch_key, mode='rb')).convert('RGB')
-        frame_sketch = misc_transforms([frame_sketch]) # 
-
     frame_style = None
-    if cfg.read_style:
-        frame_style = Image.open(open(cfg.style_image, mode='rb')).convert('RGB')
     
     # [Contions] Generators for various conditions
     if 'depthmap' in cfg.video_compositions:
@@ -249,11 +238,16 @@ def train(cfg_update, **kwargs):
         rescale_timesteps=False)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate)
-    lr_scheduler = get_cosine_schedule_with_warmup(
+    print("cfg.lr_warmup_steps", cfg.lr_warmup_steps)
+    print("num_training_steps", (len(train_dataloader) * cfg.num_epochs), cfg.num_epochs)
+    lr_scheduler = get_constant_schedule(
         optimizer=optimizer,
-        num_warmup_steps=cfg.lr_warmup_steps,
-        num_training_steps=(len(train_dataloader) * cfg.num_epochs),
     )
+    # lr_scheduler = get_cosine_schedule_with_warmup(
+    #     optimizer=optimizer,
+    #     num_warmup_steps=cfg.lr_warmup_steps,
+    #     num_training_steps=(len(train_dataloader) * cfg.num_epochs),
+    # )
 
     # Initialize accelerator and tensorboard logging
     pathstr = os.path.splitext(os.path.basename(cfg.DATAPATH))[0] + "-" + time.strftime('%y%m%d-%H%M', time.localtime(time.time()))
@@ -280,7 +274,6 @@ def train(cfg_update, **kwargs):
     )
 
     global_step = 0
-    viz_num = cfg.batch_size
 
     # Now you train the model
     
@@ -290,7 +283,7 @@ def train(cfg_update, **kwargs):
         progress_bar.set_description(f"Epoch {epoch}")
 
         for step, batch in enumerate(train_dataloader):
-
+            # print("batch.size: ", batch[0].shape)
             caps = batch[1]
             del batch[1]
             print("caps: ", caps)
@@ -299,6 +292,10 @@ def train(cfg_update, **kwargs):
                 ref_imgs, video_data, misc_data, mask, mv_data = batch
                 fps =  torch.tensor([cfg.feature_framerate]*cfg.batch_size,dtype=torch.long, device=gpu)
             else:
+                # ref_imgs : middle frame of the clip
+                # video_data : 
+                # misc_data : misc_transforms
+                # mv_data : movement mv_transforms
                 ref_imgs, video_data, misc_data, fps, mask, mv_data = batch
             
             ## save for visualization
@@ -319,10 +316,7 @@ def train(cfg_update, **kwargs):
             if 'local_image' in cfg.video_compositions:
                 frames_num = misc_data.shape[1]
                 bs_vd_local = misc_data.shape[0]
-                if cfg.read_image:
-                    image_local = frame_in.unsqueeze(0).repeat(bs_vd_local,frames_num,1,1,1).cuda()
-                else:
-                    image_local = misc_data[:,:1].clone().repeat(1,frames_num,1,1,1)
+                image_local = misc_data[:,:1].clone().repeat(1,frames_num,1,1,1)
                 image_local = rearrange(image_local, 'b f c h w -> b c f h w', b = bs_vd_local)
         
             ### encode the video_data
@@ -393,55 +387,59 @@ def train(cfg_update, **kwargs):
             y_visual = []
             if 'image' in cfg.video_compositions:
                 with torch.no_grad():
-                    if cfg.read_style:
-                        y_visual = clip_encoder_visual(clip_encoder_visual.preprocess(frame_style).unsqueeze(0).cuda()).unsqueeze(0)
-                        y_visual0 = y_visual.clone()
-                    else:
-                        ref_imgs = ref_imgs.squeeze(1)
-                        y_visual = clip_encoder_visual(ref_imgs).unsqueeze(1) # [1, 1, 1024]
-                        y_visual0 = y_visual.clone()
+                    ref_imgs = ref_imgs.squeeze(1)
+                    y_visual = clip_encoder_visual(ref_imgs).unsqueeze(1) # [1, 1, 1024]
+                    y_visual0 = y_visual.clone()
 
             s2 = time.time()
 
             with amp.autocast(enabled=cfg.use_fp16):
                 if cfg.share_noise:
                     b, c, f, h, w = video_data.shape
-                    noise = torch.randn((viz_num, c, h, w), device=gpu)
+                    noise = torch.randn((cfg.batch_size, c, h, w), device=gpu)
                     noise = noise.repeat_interleave(repeats=f, dim=0) 
-                    noise = rearrange(noise, '(b f) c h w->b c f h w', b = viz_num) 
+                    noise = rearrange(noise, '(b f) c h w->b c f h w', b = cfg.batch_size) 
                     noise = noise.contiguous()
                 else:
-                    noise = torch.randn_like(video_data[:viz_num])
+                    noise = torch.randn_like(video_data[:cfg.batch_size])
 
                 full_model_kwargs=[
-                    {'y': y0[:viz_num],
-                    "local_image": None if len(image_local) == 0 else image_local[:viz_num],
-                    'image': None if len(y_visual) == 0 else y_visual0[:viz_num],
-                    'depth': None if len(depth_data) == 0 else depth_data[:viz_num],
-                    'canny': None if len(canny_data) == 0 else canny_data[:viz_num],
-                    'sketch': None if len(sketch_data) == 0 else sketch_data[:viz_num],
-                    'masked': None if len(masked_video) == 0 else masked_video[:viz_num],
-                    'motion': None if len(mv_data_video) == 0 else mv_data_video[:viz_num],
-                    'single_sketch': None if len(single_sketch_data) == 0 else single_sketch_data[:viz_num],
-                    'fps': fps[:viz_num]}, 
-                    {'y': zero_y.repeat(viz_num,1,1) if not cfg.use_fps_condition else torch.zeros_like(y0)[:viz_num],
-                    "local_image": None if len(image_local) == 0 else image_local[:viz_num],
-                    'image': None if len(y_visual) == 0 else torch.zeros_like(y_visual0[:viz_num]),
-                    'depth': None if len(depth_data) == 0 else depth_data[:viz_num],
-                    'canny': None if len(canny_data) == 0 else canny_data[:viz_num],
-                    'sketch': None if len(sketch_data) == 0 else sketch_data[:viz_num],
-                    'masked': None if len(masked_video) == 0 else masked_video[:viz_num],
-                    'motion': None if len(mv_data_video) == 0 else mv_data_video[:viz_num],
-                    'single_sketch': None if len(single_sketch_data) == 0 else single_sketch_data[:viz_num],
-                    'fps': fps[:viz_num]}
+                    {'y': y0[:cfg.batch_size],
+                    "local_image": None if len(image_local) == 0 else image_local[:cfg.batch_size],
+                    'image': None if len(y_visual) == 0 else y_visual0[:cfg.batch_size],
+                    'depth': None if len(depth_data) == 0 else depth_data[:cfg.batch_size],
+                    'canny': None if len(canny_data) == 0 else canny_data[:cfg.batch_size],
+                    'sketch': None if len(sketch_data) == 0 else sketch_data[:cfg.batch_size],
+                    'masked': None if len(masked_video) == 0 else masked_video[:cfg.batch_size],
+                    'motion': None if len(mv_data_video) == 0 else mv_data_video[:cfg.batch_size],
+                    'single_sketch': None if len(single_sketch_data) == 0 else single_sketch_data[:cfg.batch_size],
+                    'fps': fps[:cfg.batch_size]}, 
+                    {'y': zero_y.repeat(cfg.batch_size,1,1) if not cfg.use_fps_condition else torch.zeros_like(y0)[:cfg.batch_size],
+                    "local_image": None if len(image_local) == 0 else image_local[:cfg.batch_size],
+                    'image': None if len(y_visual) == 0 else torch.zeros_like(y_visual0[:cfg.batch_size]),
+                    'depth': None if len(depth_data) == 0 else depth_data[:cfg.batch_size],
+                    'canny': None if len(canny_data) == 0 else canny_data[:cfg.batch_size],
+                    'sketch': None if len(sketch_data) == 0 else sketch_data[:cfg.batch_size],
+                    'masked': None if len(masked_video) == 0 else masked_video[:cfg.batch_size],
+                    'motion': None if len(mv_data_video) == 0 else mv_data_video[:cfg.batch_size],
+                    'single_sketch': None if len(single_sketch_data) == 0 else single_sketch_data[:cfg.batch_size],
+                    'fps': fps[:cfg.batch_size]}
                 ]
                 
-                partial_keys = cfg.guidances
+                # partial_keys = cfg.guidances
+                partial_keys = ['y', 'image', 'motion']
                 noise_motion = noise.clone()
                 model_kwargs = prepare_model_kwargs(partial_keys = partial_keys,
                                         full_model_kwargs = full_model_kwargs,
                                         use_fps_condition = cfg.use_fps_condition)
                                     
+                # print("video_data.shape: ", video_data.shape, )
+                # print("noise.shape: ", noise.shape, )
+                # for key in model_kwargs[0]:
+                #     v = model_kwargs[0][key]
+                #     if v != None:
+                #         print(key, v.shape) #, torch.sum(v))
+                
                 x0 = diffusion.ddim_sample_loop(
                     noise=noise_motion,
                     model=model.eval(),
@@ -453,11 +451,13 @@ def train(cfg_update, **kwargs):
             timesteps = torch.LongTensor([50])
             noise_scheduler = DDIMScheduler(num_train_timesteps=1000)
             # noisy_image = noise_scheduler.add_noise(sample_image, noise, timesteps)
-
-            timesteps = torch.randint(
-                0, noise_scheduler.config.num_train_timesteps, (viz_num,), device=gpu
-            ).long()
             
+            print(timesteps)
+            timesteps = torch.randint(
+                0, noise_scheduler.config.num_train_timesteps, (cfg.batch_size,), device=gpu
+            ).long()
+            print("timesteps", timesteps)
+
             with accelerator.accumulate(model):
                 # Predict the noise residual
                 # loss(self, x0, t, model, model_kwargs={}, noise=None, weight = None, use_div_loss= False):
@@ -477,10 +477,9 @@ def train(cfg_update, **kwargs):
             accelerator.log(logs, step=global_step)
             global_step += 1
 
-        # After each epoch you optionally sample some demo images with evaluate() and save the model
-        if accelerator.is_main_process:
-            if (epoch + 1) % cfg.save_model_epochs == 0 or epoch == cfg.num_epochs - 1:
-                save_path = os.path.join(cfg.output_dir, f"ckpt_{global_step}_e{epoch}.pth")
-                torch.save(model.state_dict(), save_path)
-                logging.info(f'Successfully save step {global_step} model to {save_path}')
+            if accelerator.is_main_process:
+                if global_step % cfg.save_model_steps == 0 or global_step == len(train_dataloader) * cfg.num_epochs:
+                    save_path = os.path.join(cfg.output_dir, f"ckpt_{global_step}.pth")
+                    torch.save(model.state_dict(), save_path)
+                    logging.info(f'Successfully save step {global_step} model to {save_path}')
 

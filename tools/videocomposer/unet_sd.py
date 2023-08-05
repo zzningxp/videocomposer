@@ -1542,6 +1542,9 @@ class UNetSD_temporal(nn.Module):
         misc_dropout = partial(self.misc_dropout, zero = zero, keep = keep)
 
         concat = x.new_zeros(batch, self.concat_dim, f, h, w)
+        # print("depth, local_image, motion, canny, sketch, single_sketch, masked",
+        #       depth, local_image, motion, canny, sketch, single_sketch, masked)
+
         if depth is not None:
             ### DropPath mask
             depth = rearrange(depth, 'b c f h w -> (b f) c h w')
@@ -1631,7 +1634,7 @@ class UNetSD_temporal(nn.Module):
             # 
             concat = concat + misc_dropout(masked)
             
-        # print(concat.size(), x.size())
+        # print("unet concat size: ", concat.size(), x.size())
 
         x = torch.cat([x, concat], dim=1)
         x = rearrange(x, 'b c f h w -> (b f) c h w')
@@ -1661,9 +1664,10 @@ class UNetSD_temporal(nn.Module):
         context = context.repeat_interleave(repeats=f, dim=0) 
 
 
-
         ## always in shape (b f) c h w, except for temporal layer
         x = rearrange(x, 'b c f h w -> (b f) c h w')
+        # print("forward x 0: ", x.size())
+            
         # encoder
         xs = []
         for block in self.input_blocks:
@@ -1684,6 +1688,8 @@ class UNetSD_temporal(nn.Module):
 
         # reshape back to (b c f h w)
         x = rearrange(x, '(b f) c h w -> b c f h w', b = batch)
+        
+        # print("forward x 1: ", x.size())
         return x
     
     def _forward_single(self, module, x, e, context, time_rel_pos_bias, focus_present_mask, video_mask, reference=None):

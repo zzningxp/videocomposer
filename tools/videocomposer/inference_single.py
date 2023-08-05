@@ -704,7 +704,7 @@ def worker(gpu, cfg):
                 #     v = full_model_kwargs[0][key]
                 #     if v != None:
                 #         print(key, v.shape) #, torch.sum(v))
-                
+               
                 # Save generated videos 
                 #--------------------------------------
                 partial_keys = cfg.guidances

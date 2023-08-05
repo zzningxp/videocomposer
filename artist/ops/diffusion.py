@@ -77,6 +77,7 @@ class GaussianDiffusion(object):
         self.posterior_mean_coef1 = betas * torch.sqrt(self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
         self.posterior_mean_coef2 = (1.0 - self.alphas_cumprod_prev) * torch.sqrt(alphas) / (1.0 - self.alphas_cumprod)
     
+    # add_noise
     def q_sample(self, x0, t, noise=None):
         r"""Sample from q(x_t | x_0).
         """
@@ -384,7 +385,7 @@ class GaussianDiffusion(object):
             target = {'eps': noise, 'x0': x0, 'x_{t-1}': self.q_posterior_mean_variance(x0, xt, t)[0]}[self.mean_type]
             loss = (out - target).pow(1 if self.loss_type.endswith('l1') else 2).abs().flatten(1).mean(dim=1)
             if weight is not None:
-                loss = loss*weight   
+                loss = loss*weight
 
             # div loss
             if use_div_loss and self.mean_type == 'eps' and x0.shape[2]>1:
