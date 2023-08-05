@@ -440,19 +440,18 @@ def train(cfg_update, **kwargs):
                 #     if v != None:
                 #         print(key, v.shape) #, torch.sum(v))
                 
-                x0 = diffusion.ddim_sample_loop(
-                    noise=noise_motion,
-                    model=model.eval(),
-                    model_kwargs=model_kwargs,
-                    guide_scale=9.0,
-                    ddim_timesteps=cfg.ddim_timesteps,
-                    eta=0.0)
+                # x0 = diffusion.ddim_sample_loop(
+                #     noise=noise_motion,
+                #     model=model.eval(),
+                #     model_kwargs=model_kwargs,
+                #     guide_scale=9.0,
+                #     ddim_timesteps=cfg.ddim_timesteps,
+                #     eta=0.0)
 
             timesteps = torch.LongTensor([50])
             noise_scheduler = DDIMScheduler(num_train_timesteps=1000)
             # noisy_image = noise_scheduler.add_noise(sample_image, noise, timesteps)
             
-            print(timesteps)
             timesteps = torch.randint(
                 0, noise_scheduler.config.num_train_timesteps, (cfg.batch_size,), device=gpu
             ).long()
@@ -461,9 +460,22 @@ def train(cfg_update, **kwargs):
             with accelerator.accumulate(model):
                 # Predict the noise residual
                 # loss(self, x0, t, model, model_kwargs={}, noise=None, weight = None, use_div_loss= False):
-
                 # loss = diffusion.loss(x0=noise, t=timesteps, model=model.eval(), model_kwargs=model_kwargs, noise=noise_motion, guide_scale=9.0)
-                loss = diffusion.loss(x0=x0, t=timesteps, model=model.eval(), model_kwargs=model_kwargs[0])
+                # ddim_reverse_sample_loop(self, x0, model, model_kwargs={}, clamp=None, percentile=None, guide_scale=None, ddim_timesteps=20)
+                
+                # xt = diffusion.ddim_reverse_sample_loop(
+                #                 video_data, 
+                #                 model=model.eval(), 
+                #                 model_kwargs=model_kwargs, 
+                #                 guide_scale=9.0, 
+                #                 ddim_timesteps=cfg.ddim_timesteps)
+                loss = diffusion.loss(x0=video_data,
+                                      t=timesteps,
+                                      model=model.eval(),
+                                      model_kwargs=model_kwargs[0],
+                                      noise=noise_motion)
+
+                # loss = F.mse_loss(xt, noise)
                 accelerator.backward(loss)
 
                 accelerator.clip_grad_norm_(model.parameters(), 1.0)
